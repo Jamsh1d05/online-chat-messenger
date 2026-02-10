@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+redis
+python-dotenv
+python-jose[cryptography]
+pydantic-settings
+pydantic[email]
+python-multipart
+passlib[argon2]
+firebase-admin
+alembic

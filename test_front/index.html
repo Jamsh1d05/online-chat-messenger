@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Messenger</title>
+    <style>
+        :root { --primary: #0084ff; --bg: #f0f2f5; --light: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; }
+        
+        /* Sidebar Styles */
+        #sidebar { width: 350px; background: white; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .user-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .user-item:hover { background: #f5f5f5; }
+        .user-item.active { background: #e7f3ff; }
+        .unread-badge { background: #25d366; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; font-weight: bold; }
+
+        /* Chat Styles */
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background: #efe7dd; }
+        #messages { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        .bubble { padding: 8px 12px; border-radius: 12px; max-width: 60%; position: relative; font-size: 15px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+        .bubble .time { font-size: 10px; color: #888; margin-top: 4px; display: block; text-align: right; }
+        .me { align-self: flex-end; background: #dcf8c6; border-top-right-radius: 0; }
+        .them { align-self: flex-start; background: white; border-top-left-radius: 0; }
+
+        .input-bar { padding: 15px; background: #f0f0f0; display: flex; gap: 10px; }
+        input { flex-grow: 1; border: none; padding: 12px; border-radius: 20px; outline: none; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+        
+        #login-screen { position: fixed; inset: 0; background: white; z-index: 1000; display: flex; justify-content: center; align-items: center; }
+    </style>
+</head>
+<body>
+
+<div id="login-screen">
+    <div style="width: 300px; text-align: center;">
+        <h2>Messenger Login</h2>
+        <input type="text" id="user-in" placeholder="Username" style="width:100%; margin-bottom:10px; border: 1px solid #ccc;">
+        <input type="password" id="pass-in" placeholder="Password" style="width:100%; margin-bottom:10px; border: 1px solid #ccc;">
+        <button onclick="login()" style="width:100%">Login</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <div style="padding: 20px; font-size: 20px; font-weight: bold; border-bottom: 1px solid #eee;">Chats</div>
+    <div id="user-list"></div>
+</div>
+
+<div id="chat-area">
+    <div id="chat-header" style="padding: 15px; background: #eee; font-weight: bold;">Select a contact</div>
+    <div id="messages"></div>
+    <div class="input-bar" id="input-bar" style="visibility: hidden;">
+        <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') send()">
+        <button onclick="send()">Send</button>
+    </div>
+</div>
+
+<script>
+    let token = null;
+    let socket = null;
+    let myId = null; 
+    let myNumericId = null;
+    let activeChatId = null;
+    let unreadCounts = {}; 
+    let chatHistories = {}; 
+
+    async function login() {
+        const u = document.getElementById('user-in').value;
+        const p = document.getElementById('pass-in').value;
+        const formData = new URLSearchParams();
+        formData.append('username', u);
+        formData.append('password', p);
+
+        const res = await fetch('http://127.0.0.1:8001/auth/login', { method: 'POST', body: formData });
+
+        if (res.ok) {
+            const data = await res.json();
+            token = data.access_token;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            myId = payload.sub; // This is the username
+
+            document.getElementById('login-screen').style.display = 'none';
+            await fetchUsers(); // Make sure this finishes so we know our Numeric ID
+            connectWS();
+        }
+    }
+
+    async function fetchUsers() {
+        const res = await fetch('http://127.0.0.1:8001/users', {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const users = await res.json();
+        const list = document.getElementById('user-list');
+        list.innerHTML = "";
+
+        users.forEach(user => {
+            // FIX: Identify our own Numeric ID from the list
+            if (user.username === myId) {
+                myNumericId = user.id; 
+                return; 
+            }
+
+            const div = document.createElement('div');
+            div.className = 'user-item';
+            div.id = `user-${user.id}`;
+            div.innerHTML = `<span>${user.username}</span><span class="unread-badge" style="display:none">0</span>`;
+            div.onclick = () => openChat(user.id, user.username);
+            list.appendChild(div);
+            
+            chatHistories[user.id] = [];
+            unreadCounts[user.id] = 0;
+        });
+    }
+
+    function openChat(id, name) {
+        activeChatId = id;
+        document.getElementById('chat-header').innerText = name;
+        document.getElementById('input-bar').style.visibility = 'visible';
+        
+        // Clear Unread Badge
+        unreadCounts[id] = 0;
+        updateBadge(id);
+
+        // Render History
+        renderAllMessages();
+    }
+
+    function connectWS() {
+        socket = new WebSocket(`ws://127.0.0.1:8001/ws/chat?token=${token}`);
+        
+        socket.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            
+            if (data.from_user === myNumericId) {
+                return; 
+            }
+
+            const senderId = data.from_user;
+            data.timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            if (!chatHistories[senderId]) chatHistories[senderId] = [];
+            chatHistories[senderId].push(data);
+
+            if (activeChatId === senderId) {
+                renderAllMessages();
+            } else {
+                unreadCounts[senderId]++;
+                updateBadge(senderId);
+            }
+        };
+    }
+
+    function updateBadge(userId) {
+        const badge = document.querySelector(`#user-${userId} .unread-badge`);
+        if (unreadCounts[userId] > 0) {
+            badge.innerText = unreadCounts[userId];
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function send() {
+        const input = document.getElementById('msg-input');
+        if (!input.value || !activeChatId) return;
+
+        const text = input.value;
+        const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        // Send to Backend
+        socket.send(JSON.stringify({to: activeChatId, message: text}));
+        
+        // Render locally immediately
+        chatHistories[activeChatId].push({
+            from_user: 'me', 
+            message: text, 
+            timestamp: timestamp
+        });
+        
+        renderAllMessages();
+        input.value = "";
+    }
+
+    function renderAllMessages() {
+        const container = document.getElementById('messages');
+        container.innerHTML = "";
+        chatHistories[activeChatId].forEach(msg => {
+            const side = msg.from_user === 'me' ? 'me' : 'them';
+            const div = document.createElement('div');
+            div.className = `bubble ${side}`;
+            div.innerHTML = `${msg.message} <span class="time">${msg.timestamp}</span>`;
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    }
+</script>
+</body>
+</html>
