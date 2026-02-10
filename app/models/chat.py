@@ -11,3 +11,4 @@ class Chat(Base):
     is_group = Column(Boolean, default=False)
 
     messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan")
+    participants = relationship("User", secondary="chat_participants", backref="chats")

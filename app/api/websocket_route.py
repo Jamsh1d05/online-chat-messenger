@@ -44,10 +44,22 @@ async def websocket_endpoint(websocket: WebSocket):
             from app.services.chat_logic import get_chat_participants_ids
             participant_ids = get_chat_participants_ids(db, msg.chat_id)
 
+            # Save message to DB
+            from app.crud.message import create_message
+            from app.schemas.message import MessageCreate
+            
+            # Create DB message
+            db_msg = create_message(db, MessageCreate(
+                chat_id=msg.chat_id,
+                sender_id=user.id,
+                content=msg.message
+            ))
+
             outgoing = WSMessageOut(
                 from_user=user.id,
                 chat_id=msg.chat_id,
                 message=msg.message,
+                created_at=db_msg.created_at.isoformat() if db_msg.created_at else None
             ).dict()
 
             # Broadcast to all participants
