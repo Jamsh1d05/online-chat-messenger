@@ -5,18 +5,25 @@ import { useAuth } from '../../context/AuthContext';
 import MessageBubble from './MessageBubble';
 import api from '../../services/api';
 
+interface User {
+    id: number;
+    username: string;
+}
+
 interface Chat {
     id: number;
     title: string;
+    is_group?: boolean;
+    participants?: User[];
 }
 
 interface Message {
     id?: number;
     chat_id: number;
     from_user: number;
-    sender_id?: number; // Backend schema has sender_id, WS might have from_user. Normalizing...
-    content?: string; // Backend schema
-    message?: string; // WS schema
+    sender_id?: number;
+    content?: string;
+    message?: string;
     created_at?: string;
 }
 
@@ -32,12 +39,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
 
 
     // WebSocket URL: ws://host/ws/chat?token=...
-    const socketUrl = `ws://localhost:8000/ws/chat?token=${token}`;
+    const socketUrl = token ? `ws://localhost:8000/ws/chat?token=${token}` : null;
 
     const { sendMessage, lastMessage, readyState } = useWebSocket(socketUrl, {
         shouldReconnect: (_closeEvent) => true,
         reconnectAttempts: 10,
         reconnectInterval: 3000,
+        onOpen: () => console.log("WS Connected"),
+        onClose: () => console.log("WS Closed"),
+        onError: (e) => console.error("WS Error", e),
+        onMessage: (e) => console.log("WS Message Raw:", e.data)
     });
 
     // Fetch history when chat changes
@@ -67,9 +78,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
         if (lastMessage !== null) {
             try {
                 const data = JSON.parse(lastMessage.data);
+                console.log("Parsed WS Data:", data);
                 // Check if message belongs to current chat
                 if (data.chat_id === chat.id) {
-                    setMessages((prev) => [...prev, data]);
+                    setMessages((prev) => {
+                        // Avoid duplicates if echoed back
+                        // Using created_at or some ID if available could be better, but simple append for now
+                        return [...prev, data];
+                    });
                 }
             } catch (e) {
                 console.error("Parse error", e);
@@ -99,11 +115,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat }) => {
         // So we just wait for it to come back in 'lastMessage'
     };
 
+    const getChatTitle = (chat: Chat) => {
+        if (chat.is_group) return chat.title;
+        const other = chat.participants?.find(p => p.id !== user?.id);
+        return other ? other.username : (chat.title || `Chat #${chat.id}`);
+    };
+
     return (
         <div className="flex-1 flex flex-col h-full bg-background/50 backdrop-blur-sm">
             {/* Header */}
             <div className="p-4 border-b border-border bg-card/50">
-                <h3 className="font-bold text-lg">{chat.title || `Chat #${chat.id}`}</h3>
+                <h3 className="font-bold text-lg">{getChatTitle(chat)}</h3>
             </div>
 
             {/* Messages */}
