@@ -8,9 +8,11 @@ from app.crud.chat import get_chat, get_chats, create_chat
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
+from app.api.dependencies.api_dep import get_current_user
+
 @router.post("/", response_model=ChatOut)
-def create_chat_endpoint(chat_in: ChatCreate, db: Session = Depends(get_db)):
-    return create_chat(db, chat_in)
+def create_chat_endpoint(chat_in: ChatCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    return create_chat(db, chat_in, current_user.id)
 
 @router.get("/", response_model=List[ChatOut])
 def list_chats(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
