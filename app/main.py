@@ -28,7 +28,7 @@ app.include_router(websocket_route.router)
 @app.on_event("startup")
 async def startup_event():
     await init_redis()
-    print("Redis initialized")
+    print("Redis on")
 
 
 @app.on_event("shutdown")

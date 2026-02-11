@@ -23,12 +23,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         if (token && !user) {
-            // Try to restore user from localStorage if available, or fetch
             const storedUser = localStorage.getItem('user');
             if (storedUser) {
                 setUser(JSON.parse(storedUser));
             } else {
-                // Verify token and fetch user
                 api.get('/users/me')
                     .then(res => {
                         setUser(res.data);
