@@ -40,7 +40,6 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_json()
             msg = WSMessageIn(**data)
 
-            # Get participants of the chat
             from app.services.chat_logic import get_chat_participants_ids
             participant_ids = get_chat_participants_ids(db, msg.chat_id)
 
@@ -62,7 +61,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 created_at=db_msg.created_at.isoformat() if db_msg.created_at else None
             ).dict()
 
-            # Broadcast to all participants
             for participant_id in participant_ids:
                  await manager.publish(
                     channel=f"user:{participant_id}",

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
-import { MessageSquare, Users, Plus, Search, UserPlus } from 'lucide-react';
+import { MessageSquare, Users, Search, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface User {
@@ -91,16 +91,11 @@ const ChatList: React.FC<ChatListProps> = ({ onSelectChat, selectedChatId }) => 
 
     const handleStartPrivateChat = async (targetUserId: number) => {
         try {
-            // Check if chat already exists locally (optimization)
-            // Ideally backend should handle "get or create" logic for 1-on-1
-            // For now, just create new.
             const res = await api.post('/chats/', {
                 is_group: false,
                 participant_ids: [targetUserId]
             });
 
-            // Allow duplicates for now or backend handles it? 
-            // Assuming acceptable behavior.
             setChats([res.data, ...chats]);
             setShowSearchModal(false);
             onSelectChat(res.data);
@@ -111,7 +106,7 @@ const ChatList: React.FC<ChatListProps> = ({ onSelectChat, selectedChatId }) => 
 
     const getChatTitle = (chat: Chat) => {
         if (chat.is_group) return chat.title;
-        // Find other participant
+
         const other = chat.participants?.find(p => p.id !== currentUser?.id);
         return other ? other.username : (chat.title || "Chat");
     };
