@@ -6,8 +6,6 @@ A full-stack real-time messenger with Group Chat support.
 - **Backend**: FastAPI, SQLAlchemy, PostgreSQL, Redis
 - **Frontend**: React (Vite), TailwindCSS
 
-## Local Development (No Docker)
-
 ### Prerequisites
 - **PostgreSQL**: Running locally on port 5432.
 - **Redis**: Running locally on port 6379.
