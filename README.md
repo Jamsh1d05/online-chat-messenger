@@ -15,7 +15,7 @@ A full-stack real-time messenger with Group Chat support.
 - **Python**: v3.10+ installed.
 
 ### 1. Backend Setup
-1.  **Create Virtual Environment** (if not exists):
+1.  **Create Virtual Environment** :
     ```bash
     python3 -m venv venv
     source venv/bin/activate
