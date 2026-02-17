@@ -29,3 +29,4 @@ def update_current_user(user_update: UserUpdate, db: Session = Depends(get_db), 
 @router.get("/", response_model=List[UserOut])
 def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(User).offset(skip).limit(limit).all()
+
